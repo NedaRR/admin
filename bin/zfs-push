@@ -1,0 +1,119 @@
+#!/bin/bash
+# Push filsystems/snapshots to a remote ZFS pool
+#
+# Sends any filesystems that don't exist on the remote side, and attempts to
+# send incrementals of snapshots of existing filesystems.
+#
+eval "$($(dirname $0)/docopts -h - : "$@" <<EOF
+
+Syncronizes pools between hosts. 
+
+Usage: 
+  $(basename $0) [options] <root_filesystem> <remote_host> [<remote_root>]
+ 
+Options:  
+  --snap_pattern=PATTERN    Snapshot pattern to filter for [default: .*]
+  --exclude=PATTERN         List of filesystems to exclude [default: ^$]
+  --filter=CMD              Filter program
+  --zfs_cmd=CMD             zfs command [default: sudo zfs]
+  --compress                Compress stream using lz4
+  --nofullsnapshots         Do not send full snapshots
+  --dry_run, -n             Pretend to do stuff
+  --verbose, -v      
+EOF
+)"
+function verbose { 
+  [[ "$verbose" == "true" ]] && echo "$1" 
+}
+
+remote_root=${remote_root:-${root_filesystem/\/*/}}
+filter=${filter:+"$filter |"}
+    
+zfs=$zfs_cmd
+if [[ "$remote_host" == "localhost" ]]; then
+  remote_sh=""
+else
+  remote_sh="ssh -c arcfour -o compression=no $remote_host"
+fi
+zfs_dry_run="$([[ "$dry_run" == "true" ]] && printf "%s" '-n')"
+zfs_verbose="$([[ "$verbose" == "true" ]] && printf "%s" "-v")" 
+zfs_args="$zfs_dry_run $zfs_verbose"
+exclude=$(echo $exclude | sed 's/,/\\|/g')
+
+# idea: 
+# 1. deal with each filesystem in turn (no recursive)
+# 2. if remote filesystem already exists, then sync snapshots
+# 3. do this by looking at the latest snapshot on the remote end, 
+#    and sending an incremental from local end
+# 4. if remote filesystem doesn't exist, send a full snapshot
+for filesystem in \
+  $($zfs list $root_filesystem -r -o name -H -t filesystem | grep -v "$exclude"); do 
+
+  remote_filesystem=$(echo $filesystem | sed "s#[^/]*/#$remote_root/#") 
+
+  # fetch a lists of local and remote snapshots
+  remote_snapshots=$(mktemp)
+  local_snapshots=$(mktemp)
+
+  ssh $remote_host \
+      $zfs list $remote_filesystem -d1 -o name -H -t snapshot -s creation \
+      2>/dev/null | grep "$snap_pattern" > $remote_snapshots
+
+  $zfs list $filesystem -d1 -o name -H -t snapshot -s creation | \
+      grep "$snap_pattern" > $local_snapshots
+
+  latest_remote_snapshot=$(tail -1 $remote_snapshots) 
+  latest_local_snapshot=$(tail -1 $local_snapshots) 
+
+  # find common snapshot name 
+  sed -i 's/.*@//g' $remote_snapshots
+  sed -i 's/.*@//g' $local_snapshots
+  common_snapname=$(comm -1 -2 --nocheck-order \
+    $local_snapshots $remote_snapshots | tail -1) 
+
+  remote_snapname=${latest_remote_snapshot/*@/}
+  local_snapname=${latest_local_snapshot/*@/}
+
+  if [[ -z "$local_snapname" ]]; then
+    verbose "$filesystem: local dataset missing snapshots. skipping."
+    continue
+  fi
+
+  if [[  "x$remote_snapname" == "x$local_snapname" ]]; then
+    verbose "# $remote_host $remote_filesystem up to date. skipping."
+    continue
+  fi
+
+  if [[ -z "$latest_remote_snapshot" ]]; then
+    if [[ "$nofullsnapshots" == "true" ]]; then
+      echo "# $latest_local_snapshot not on remote, and --nofullsnapshots. skipping." 
+      continue
+    fi
+    verbose "# sending full snapshot $latest_local_snapshot to $remote_host"
+    send_args="-R $latest_local_snapshot"
+  else
+    #TODO: check that latest_remote is earlier than common 
+    if [[ -z "$common_snapname" ]]; then
+      verbose "no common snapshot, remote exists ($latest_remote_snapshot). skipping"
+      continue
+    fi
+
+    verbose "# sending $common_snapname..$latest_local_snapshot to $remote_host"
+    send_args="-I $common_snapname $latest_local_snapshot"
+  fi 
+
+  local_filter="$filter"
+  if [[ "$compress" == "true" ]]; then
+    local_filter="$local_filter lz4 |"
+    remote_filter="lz4 -d |"
+  fi
+  send="$zfs send -p $send_args $zfs_verbose | $local_filter "
+  send="$send $remote_sh"
+  send="$send '$remote_filter $zfs recv -Fdu $zfs_dry_run $remote_root '"
+  echo $send
+  if [[ $dry_run == "false" ]]; then
+    eval "$send"
+  fi
+
+  rm $local_snapshots $remote_snapshots
+done

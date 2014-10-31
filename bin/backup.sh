@@ -27,12 +27,12 @@ zfs mount -a    || die "Failed to mount ZFS datasets"
 
 # note trailing slashes on source folders. rsync treats this as "copy everything
 # from inside the folder, but not the folder itself"
-#sync /archive         /tank
+sync /archive         /tank
 sync /home            /tank
 sync /spins           /tank
-#sync /projects        /tank
-#sync /quarantine      /tank
-#sync /opt/quarantine/ /tank/quarantine-nouveau
+sync /projects        /tank
+sync /quarantine      /tank
+sync /opt/quarantine/ /tank/quarantine-nouveau
 
 log "Taking a ZFS snapshot of tank"
 /usr/local/bin/zsnap --keep=8 --prefix=daily- tank
