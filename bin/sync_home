@@ -1,0 +1,63 @@
+#!/bin/bash
+# Helps sync files between local home and /projects
+sharedhome=/projects/${USER}/home
+syncpathsfile=${sharedhome}/.syncpaths
+syncpaths=".ssh .config .bashrc .bash_profile .profile"
+scriptname=$(basename $0)
+
+function bold   { echo "\e[1;97m${1}\e[0m"; } 
+function cyan   { echo "\e[1;96m${1}\e[0m"; } 
+function yellow { echo "\e[1;93m${1}\e[0m"; } 
+
+usage="
+Syncs files between $(bold $sharedhome) and $(bold $HOME)
+
+Usage: $scriptname <command>
+
+Commands: 
+
+    pull                sync from $sharedhome to $HOME
+    push                sync from $HOME to $sharedhome
+    help                show this help
+
+Example: 
+
+    $scriptname pull
+
+If it exists, $scriptname reads a list of relative paths from 
+the file $(bold $syncpathsfile), and only syncs those paths. 
+For example, the file could contain:
+
+    .ssh
+    .bashrc
+    .config
+
+If $syncpathsfile doesn't exist, then the following paths will 
+be sync'ed by default: 
+
+    $(echo $syncpaths|sed 's/ /\n    /g')
+"
+
+command="$1"
+
+if [[ -e "${syncpathsfile}" ]]; then
+  syncpaths=".syncpaths $(cat $syncpathsfile)"
+fi
+
+if [[ "${command}" == "pull" ]]; then
+  source=${sharedhome}
+  target=${HOME}
+elif [[ "${command}" == "push" ]]; then
+  source=${HOME}
+  target=${sharedhome}
+else
+  echo -e "${usage}"
+  exit 1;
+fi
+
+#do the sync
+echo -e "Copying from $(yellow ${source}) to $(cyan ${target})"
+for path in $syncpaths; do
+  echo -e "$(yellow ${source}/${path})"
+  rsync -ua ${source}/${path} ${target}
+done
