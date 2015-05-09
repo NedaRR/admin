@@ -12,8 +12,8 @@ excludes="--exclude=.cache --exclude=Cache --exclude='.Trash*'"
 excludes="$excludes --exclude=.thumbnails --exclude=Trash"
 rsync_opts="-aH --delete $excludes"   # add -n for a dry run
 
-function log { echo "$1"; }
-function die { echo "$1"; exit 1; }
+function log { echo "$(date): $1"; }
+function die { log "$1"; exit 1; }
 function sync { 
   src=$1    # source folder to rsync (trailing slashes are important!)
   dest=$2   # destination folder 
@@ -23,24 +23,22 @@ function sync {
 }
   
 log "Mounting ZFS"
-zfs mount -a    || die "Failed to mount ZFS datasets"
+zfs mount -a || die "Failed to mount ZFS tank dataset"
 
 # note trailing slashes on source folders. rsync treats this as "copy everything
 # from inside the folder, but not the folder itself"
 sync /archive         /tank
-sync /home            /tank
-sync /spins           /tank
 sync /projects        /tank
+# this does not back up properly -- maybe we can mirror instead? JDV
+#sync /xen             /tank
+# this isnt the whole database, but it is all of the data.
+sync /mnt/xnat        /tank
 sync /quarantine      /tank
 sync /opt/quarantine/ /tank/quarantine-nouveau
 
 log "Taking a ZFS snapshot of tank"
 /usr/local/bin/zsnap --keep=8 --prefix=daily- tank
 
-log "Backup /home to tigrsrv:/pool/home and take ZFS snapshot"
-sudo -u localroot ssh tigrsrv \
-  "(mountpoint -q /pool/home || sudo zfs mount pool/home) &&
-   sudo rsync $rsync_opts /home/ /pool/home &&
-   sudo /usr/local/bin/zsnap --keep=8 --prefix=daily- pool/home"
-
 log "Backup complete."
+log "Space used on tank: $(zfs get used tank -Ho value) (logically: $(zfs get lused tank -Ho value))"
+log "Space free on tank: $(zfs get avail tank -Ho value)"
