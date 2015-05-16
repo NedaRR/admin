@@ -10,7 +10,12 @@ exec 1> >(logger -s -t $(basename $0)) 2>&1
 
 excludes="--exclude=.cache --exclude=Cache --exclude='.Trash*'"
 excludes="$excludes --exclude=.thumbnails --exclude=Trash"
-rsync_opts="-aH --delete $excludes"   # add -n for a dry run
+rsync_opts="-aH -F --delete $excludes"   # add -n for a dry run
+                                         # -a transfers ownership and perms
+                                         # -H preserves hardlinks
+                                         # -F excludes all folders with
+                                         #    .rsync-filter files in them
+                                         # --delete deletes files on target
 
 function log { echo "$(date): $1"; }
 function die { log "$1"; exit 1; }
@@ -19,7 +24,7 @@ function sync {
   dest=$2   # destination folder 
   log "Backup $src to $dest"
   mountpoint -q $src || (mount $src || die "Failed to mount $src. Skipping.")
-  rsync $rsync_opts $src $dest
+  echo rsync $rsync_opts $src $dest
 }
   
 log "Mounting ZFS"
@@ -29,8 +34,6 @@ zfs mount -a || die "Failed to mount ZFS tank dataset"
 # from inside the folder, but not the folder itself"
 sync /archive         /tank
 sync /projects        /tank
-# this does not back up properly -- maybe we can mirror instead? JDV
-#sync /xen             /tank
 # this isnt the whole database, but it is all of the data.
 sync /mnt/xnat        /tank
 sync /quarantine      /tank
