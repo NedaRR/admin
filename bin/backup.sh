@@ -10,7 +10,7 @@ exec 1> >(logger -s -t $(basename $0)) 2>&1
 
 excludes="--exclude=.cache --exclude=Cache --exclude='.Trash*'"
 excludes="$excludes --exclude=.thumbnails --exclude=Trash"
-excludes="$excludes --exclude=/david/"   # excludes david's folders
+excludes="$excludes --exclude=david/"    # excludes david's folders
 rsync_opts="-aH --delete $excludes"      # add -n for a dry run
                                          # -a transfers ownership and perms
                                          # -H preserves hardlinks
@@ -23,7 +23,7 @@ function sync {
   dest=$2   # destination folder 
   log "Backup $src to $dest"
   mountpoint -q $src || (mount $src || die "Failed to mount $src. Skipping.")
-  echo rsync $rsync_opts $src $dest
+  rsync $rsync_opts $src $dest
 }
   
 log "Mounting ZFS"
