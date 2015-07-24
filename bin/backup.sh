@@ -35,7 +35,6 @@ sync /archive         /tank
 sync /projects        /tank
 # this isnt the whole database, but it is all of the data.
 sync /mnt/xnat        /tank
-sync /quarantine      /tank
 sync /opt/quarantine/ /tank/quarantine-nouveau
 
 log "Taking a ZFS snapshot of tank"
