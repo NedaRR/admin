@@ -11,6 +11,7 @@ exec 1> >(logger -s -t $(basename $0)) 2>&1
 excludes="--exclude=.cache --exclude=Cache --exclude='.Trash*'"
 excludes="$excludes --exclude=.thumbnails --exclude=Trash"
 excludes="$excludes --exclude=david/"    # excludes david's folders
+excludes="$excludes --exclude=alumni/"   # excludes alumni folder
 rsync_opts="-aH --delete $excludes"      # add -n for a dry run
                                          # -a transfers ownership and perms
                                          # -H preserves hardlinks
@@ -37,8 +38,8 @@ sync /projects        /tank
 sync /mnt/xnat        /tank
 sync /opt/quarantine/ /tank/quarantine-nouveau
 
-log "Taking a ZFS snapshot of tank"
-/usr/local/bin/zsnap --keep=8 --prefix=daily- tank
+#log "Taking a ZFS snapshot of tank"
+#/usr/local/bin/zsnap --keep=8 --prefix=daily- tank
 
 log "Backup complete."
 log "Space used on tank: $(zfs get used tank -Ho value) (logically: $(zfs get lused tank -Ho value))"
