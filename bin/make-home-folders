@@ -1,0 +1,10 @@
+#!/bin/bash
+
+nisserver=$(ypwhich)
+echo 'MSG: Making home folders for all users found on NIS server ${nisserver}'
+echo '     Run as root.'
+for user in $(ypcat passwd | cut -d ':' -f 1); do
+    mkdir /home/${user}
+    chown ${user} /home/${user}
+    chgrp ${user} /home/${user}
+done
